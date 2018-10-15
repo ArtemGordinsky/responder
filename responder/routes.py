@@ -1,3 +1,4 @@
+from graphql import GraphQLSchema
 from parse import parse, search
 
 
@@ -16,6 +17,7 @@ class Route:
     def __init__(self, route, endpoint):
         self.route = route
         self.endpoint = endpoint
+        self.is_graphql = isinstance(self.endpoint, GraphQLSchema)
 
     def __repr__(self):
         return f"<Route {self.route!r}={self.endpoint!r}>"
@@ -52,4 +54,4 @@ class Route:
 
         return url
 
-    # def is_graphql, is_wsgi
+    # def is_wsgi

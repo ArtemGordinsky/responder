@@ -106,46 +106,50 @@ class API:
                 url = req.url.replace("http://", "https://", 1)
                 self.redirect(resp, location=url)
 
-        if route:
-            try:
-                params = self.routes[route].incoming_matches(req.url.path)
-                result = self.routes[route].endpoint(req, resp, **params)
-                if hasattr(result, "cr_running"):
-                    await result
-            # The request is using class-based views.
-            except TypeError as e:
-                try:
-                    view = self.routes[route].endpoint(**params)
-                except TypeError:
-                    view = self.routes[route].endpoint
-                    try:
-                        # GraphQL Schema.
-                        assert hasattr(view, "execute")
-                        self.graphql_response(req, resp, schema=view)
-                    except AssertionError:
-                        # WSGI App.
-                        try:
-                            return view(
-                                environ=req._environ, start_response=req._start_response
-                            )
-                        except TypeError:
-                            pass
-
-                # Run on_request first.
-                try:
-                    getattr(view, "on_request")(req, resp)
-                except AttributeError:
-                    pass
-
-                # Then on_get.
-                method = req.method.lower()
-
-                try:
-                    getattr(view, f"on_{method}")(req, resp)
-                except AttributeError:
-                    pass
-        else:
+        if not route:
             self.default_response(req, resp)
+            return resp
+
+        route_instance = self.routes[route]
+
+        if route_instance.is_graphql:
+            view = route_instance.endpoint
+            assert hasattr(view, "execute")
+            self.graphql_response(req, resp, schema=view)
+            return resp
+
+        try:
+            params = route_instance.incoming_matches(req.url.path)
+            result = route_instance.endpoint(req, resp, **params)
+            if hasattr(result, "cr_running"):
+                await result
+        # The request is using class-based views.
+        except TypeError:
+            try:
+                view = route_instance.endpoint(**params)
+            except TypeError:
+                view = route_instance.endpoint
+                # WSGI App.
+                try:
+                    return view(
+                        environ=req._environ, start_response=req._start_response
+                    )
+                except TypeError:
+                    pass
+
+            # Run on_request first.
+            try:
+                getattr(view, "on_request")(req, resp)
+            except AttributeError:
+                pass
+
+            # Then on_get.
+            method = req.method.lower()
+
+            try:
+                getattr(view, f"on_{method}")(req, resp)
+            except AttributeError:
+                pass
 
         return resp
 
